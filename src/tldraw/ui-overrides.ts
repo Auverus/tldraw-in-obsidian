@@ -1,7 +1,7 @@
 import { Editor, TLExportType, TLImageExportOptions, TLUiActionItem, TLUiActionsContextType, TLUiEventContextType, TLUiEventSource, TLUiOverrideHelpers, TLUiOverrides, useUiEvents } from "tldraw";
 import { Platform } from "obsidian";
 import TldrawPlugin from "src/main";
-import { downloadBlob, getSaveFileCopyAction, getSaveFileCopyInVaultAction, importFileAction, OPEN_FILE_ACTION, SAVE_FILE_COPY_ACTION, SAVE_FILE_COPY_IN_VAULT_ACTION } from "src/utils/file";
+import { downloadBlob, getSaveFileCopyAction, getSaveFileCopyInVaultAction, importFileAction, importPDFAction, OPEN_FILE_ACTION, OPEN_PDF_ACTION, SAVE_FILE_COPY_ACTION, SAVE_FILE_COPY_IN_VAULT_ACTION } from "src/utils/file";
 
 const DEFAULT_CAMERA_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
 
@@ -35,6 +35,7 @@ export function uiOverrides(plugin: TldrawPlugin): TLUiOverrides {
 			);
 
 			actions[OPEN_FILE_ACTION] = importFileAction(plugin, addDialog);
+			actions[OPEN_PDF_ACTION] = importPDFAction(plugin, addDialog);
 
 			(['jpeg', 'png', 'svg', 'webp'] satisfies TLExportType[]).map((e) => exportAllAsOverride(editor, actions, plugin, {
 				exportOptions: {

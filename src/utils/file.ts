@@ -4,17 +4,22 @@ import {
 	serializeTldrawJsonBlob,
 	Editor,
 	useDefaultHelpers,
+	Box,
+	TLAssetId,
+	TLShapeId,
+	createShapeId,
+	AssetRecordType
 } from "tldraw";
 import TldrawPlugin from "src/main";
 import { migrateTldrawFileDataIfNecessary } from "./migrate/tl-data-to-tlstore";
 import { Platform, TFile } from "obsidian";
 import { showSaveFileModal } from "src/obsidian/modal/save-file-modal";
 // import { shouldOverrideDocument } from "src/components/file-menu/shouldOverrideDocument";
-
+// PDF.js worker is dynamically imported in loadPdf function
 export const SAVE_FILE_COPY_ACTION = "save-file-copy";
 export const SAVE_FILE_COPY_IN_VAULT_ACTION = "save-file-copy-in-vault";
 export const OPEN_FILE_ACTION = 'open-file';
-
+export const OPEN_PDF_ACTION = 'open-pdf';
 // https://github.com/tldraw/tldraw/blob/58890dcfce698802f745253ca42584731d126cc3/packages/tldraw/src/lib/utils/export/exportAs.ts#L57
 const downloadFile = (file: File) => {
 	const link = document.createElement("a");
@@ -104,7 +109,65 @@ export function importFileAction(plugin: TldrawPlugin,
 		},
 	};
 }
+// export function importPDFAction(plugin: TldrawPlugin,
+// 	addDialog: ReturnType<typeof useDefaultHelpers>['addDialog']
+// ): TLUiActionItem {
+// 	return {
+// 		id: OPEN_PDF_ACTION,
+// 		label: "Open PDF",
+// 		readonlyOk: true,
+// 		async onSelect(source) {
+// 			const [fileHandle] = await window.showOpenFilePicker({
+// 				types: [
+// 					{
+// 						description: 'PDF Document',
+// 						accept: {
+// 							'application/pdf': ['.pdf']
+// 						}
+// 					}
+// 				],
+// 				excludeAcceptAllOption: true,
+// 			});
 
+// 			const file = await fileHandle.getFile();
+// 			const arrayBuffer = await file.arrayBuffer();
+// 			const pdf = await loadPdf(file.name, arrayBuffer);
+
+// 			// Opening the PDF with the required parameters
+// 			await plugin.openPDF(pdf.source, 'new-tab');
+// 		},
+// 	};
+// }
+
+export function importPDFAction(plugin: TldrawPlugin,
+    addDialog: ReturnType<typeof useDefaultHelpers>['addDialog']
+): TLUiActionItem {
+    return {
+        id: OPEN_PDF_ACTION,
+        label: "Open PDF",
+        readonlyOk: true,
+        async onSelect(source) {
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [
+                    {
+                        description: 'PDF Document',
+                        accept: {
+                            'application/pdf': ['.pdf']
+                        }
+                    }
+                ],
+                excludeAcceptAllOption: true,
+            });
+
+            const file = await fileHandle.getFile();
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await loadPdf(file.name, arrayBuffer);
+
+            // Pass the entire pdf object, not just the source
+            await plugin.openPDF(pdf, 'new-tab');
+        },
+    };
+}
 export async function importTldrawFile(plugin: TldrawPlugin, attachTo?: TFile) {
 	if ('showOpenFilePicker' in window) {
 		const [file] = await window.showOpenFilePicker({
@@ -130,4 +193,128 @@ export async function importTldrawFile(plugin: TldrawPlugin, attachTo?: TFile) {
 	} else {
 		throw new Error('Unable to open file picker.');
 	}
+}
+
+
+//https://tldraw.dev/examples/use-cases/pdf-editor
+export interface PdfPage {
+	src: string
+	bounds: Box
+    assetId: `asset:${string}` // Update the type to match the "asset:" prefix requirement
+	// 	//assetId: TLAssetId
+	shapeId: TLShapeId
+}
+
+export interface Pdf {
+	name: string
+	pages: PdfPage[]
+	source: string | ArrayBuffer
+}
+
+const pageSpacing = 32
+// export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
+// 	const PdfJS = await import('pdfjs-dist')
+// 	// Import the worker directly from the package
+// 	// Set the worker to use the imported worker
+// 	const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+// 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+// 	const pdf = await PdfJS.getDocument(source.slice(0)).promise
+
+// 	const canvas = window.document.createElement('canvas')
+// 	const context = canvas.getContext('2d')
+// 	if (!context) throw new Error('Failed to create canvas context')
+
+// 	const visualScale = 1.5
+// 	const scale = window.devicePixelRatio
+
+// 	let top = 0
+// 	let widest = 0
+// 	const pages: PdfPage[] = []
+// 	for (let i = 1; i <= pdf.numPages; i++) {
+// 		const page = await pdf.getPage(i)
+// 		const viewport = page.getViewport({ scale: scale * visualScale })
+// 		canvas.width = viewport.width
+// 		canvas.height = viewport.height
+// 		const renderContext = {
+// 			canvasContext: context,
+// 			viewport,
+// 		}
+// 		await page.render(renderContext).promise
+
+// 		const width = viewport.width / scale
+// 		const height = viewport.height / scale
+// 		pages.push({
+// 			src: canvas.toDataURL(),
+// 			bounds: new Box(0, top, width, height),
+// 			assetId: AssetRecordType.createId(),
+// 			shapeId: createShapeId(),
+// 		})
+// 		top += height + pageSpacing
+// 		widest = Math.max(widest, width)
+// 	}
+// 	canvas.width = 0
+// 	canvas.height = 0
+
+// 	for (const page of pages) {
+// 		page.bounds.x = (widest - page.bounds.width) / 2
+// 	}
+
+// 	return {
+// 		name,
+// 		pages,
+// 		source,
+// 	}
+// }
+export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
+    const PdfJS = await import('pdfjs-dist')
+    // Import the worker directly from the package
+    // Set the worker to use the imported worker
+    const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+    PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+    const pdf = await PdfJS.getDocument(source.slice(0)).promise
+
+    const canvas = window.document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Failed to create canvas context')
+
+    const visualScale = 1.5
+    const scale = window.devicePixelRatio
+
+    let top = 0
+    let widest = 0
+    const pages: PdfPage[] = []
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const viewport = page.getViewport({ scale: scale * visualScale })
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        const renderContext = {
+            canvasContext: context,
+            viewport,
+        }
+        await page.render(renderContext).promise
+
+        const width = viewport.width / scale
+        const height = viewport.height / scale
+        pages.push({
+            src: canvas.toDataURL(),
+            bounds: new Box(0, top, width, height),
+            assetId: `asset:${AssetRecordType.createId()}`, // Add "asset:" prefix here
+            shapeId: createShapeId(),
+        })
+        top += height + pageSpacing
+        widest = Math.max(widest, width)
+    }
+    canvas.width = 0
+    canvas.height = 0
+
+    for (const page of pages) {
+        page.bounds.x = (widest - page.bounds.width) / 2
+    }
+
+    return {
+        name,
+        pages,
+        source,
+    }
 }
