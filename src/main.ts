@@ -722,106 +722,108 @@ export default class TldrawPlugin extends Plugin {
 	// 	}
 	// }	
 	// 			// Rest of the code remains the same...
-public openPDF = async (pdfInput: Pdf | ArrayBuffer | string, location: PaneTarget, viewType: ViewType = VIEW_TYPE_TLDRAW) => {
-    let leaf: WorkspaceLeaf;
-
-    if (location === "current-tab")
-        leaf = this.app.workspace.getLeaf(false);
-    else if (location === "new-tab")
-        leaf = this.app.workspace.getLeaf(true);
-    else if (location === "new-window")
-        leaf = this.app.workspace.getLeaf("window");
-    else if (location === "split-tab")
-        leaf = this.app.workspace.getLeaf("split");
-    else leaf = this.app.workspace.getLeaf(false);
-
-    // Create a new tldraw file to display the PDF
-    const pdfFile = await this.createUntitledTldrFile();
-    await leaf.openFile(pdfFile);
-    
-    // Prepare the PDF data before waiting for the editor
-    let pdfResult: Pdf;
-    try {
-        if (typeof pdfInput === 'object' && 'pages' in pdfInput) {
-            pdfResult = pdfInput;
-        } else {
-            let pdfData: ArrayBuffer;
-            let fileName: string;
-            
-            if (typeof pdfInput === 'string') {
-                fileName = pdfInput.split('/').pop() || 'document.pdf';
-                const response = await fetch(pdfInput);
-                if (!response.ok) {
-                    throw new Error(`Failed to load PDF: ${response.statusText}`);
-                }
-                pdfData = await response.arrayBuffer();
-            } else {
-                fileName = 'document.pdf';
-                pdfData = pdfInput;
-            }
-            
-            pdfResult = await loadPdf(fileName, pdfData);
-        }
-    } catch (error) {
-        console.error("Error processing PDF:", error);
-        new Notice(`Failed to load PDF: ${error.message}`);
-        return;
-    }
-    
-    // Wait for the view to be ready
-    await this.updateViewMode(viewType, leaf);
-    
-    // Now ensure the editor is ready before continuing
-    await this.waitForEditor(10, 100); // Try for up to 1 second (10 attempts * 100ms)
-    
-    if (!this.currTldrawEditor) {
-        new Notice("Failed to initialize the editor. Please try again.");
-        return;
-    }
-    
-    try {
-        // Create assets for PDF pages
-        this.currTldrawEditor.createAssets(
-            pdfResult.pages.map((page) => ({
-                id: page.assetId as TLAssetId,
-                typeName: 'asset',
-                type: 'image',
-                meta: {},
-                props: {
-                    w: page.bounds.w,
-                    h: page.bounds.h,
-                    mimeType: 'image/png',
-                    src: page.src,
-                    name: 'page',
-                    isAnimated: false,
-                },
-            }))
-        );
-
-        // Create shapes for PDF pages
-        this.currTldrawEditor.createShapes(
-            pdfResult.pages.map((page) => ({
-                id: page.shapeId as TLShapeId,
-                type: 'image',
-                x: page.bounds.x,
-                y: page.bounds.y,
-                isLocked: true,
-                props: {
-                    assetId: page.assetId as TLAssetId,
-                    w: page.bounds.w,
-                    h: page.bounds.h,
-                },
-            }))
-        );
-
-        // Apply PDF-specific behavior
-        this.applyPdfBehavior(pdfResult);
-        
-    } catch (error) {
-        console.error("Error rendering PDF:", error);
-        new Notice(`Failed to render PDF: ${error.message}`);
-    }
-}
+	public openPDF = async (pdfInput: Pdf | ArrayBuffer | string, location: PaneTarget, viewType: ViewType = VIEW_TYPE_TLDRAW) => {
+		let leaf: WorkspaceLeaf;
+	
+		if (location === "current-tab")
+			leaf = this.app.workspace.getLeaf(false);
+		else if (location === "new-tab")
+			leaf = this.app.workspace.getLeaf(true);
+		else if (location === "new-window")
+			leaf = this.app.workspace.getLeaf("window");
+		else if (location === "split-tab")
+			leaf = this.app.workspace.getLeaf("split");
+		else leaf = this.app.workspace.getLeaf(false);
+	
+		// Create a new tldraw file to display the PDF
+		const pdfFile = await this.createUntitledTldrFile();
+		await leaf.openFile(pdfFile);
+		
+		// Prepare the PDF data before waiting for the editor
+		let pdfResult: Pdf;
+		try {
+			if (typeof pdfInput === 'object' && 'pages' in pdfInput) {
+				pdfResult = pdfInput;
+			} else {
+				let pdfData: ArrayBuffer;
+				let fileName: string;
+				
+				if (typeof pdfInput === 'string') {
+					fileName = pdfInput.split('/').pop() || 'document.pdf';
+					const response = await fetch(pdfInput);
+					if (!response.ok) {
+						throw new Error(`Failed to load PDF: ${response.statusText}`);
+					}
+					pdfData = await response.arrayBuffer();
+				} else {
+					fileName = 'document.pdf';
+					pdfData = pdfInput;
+				}
+				
+				pdfResult = await loadPdf(fileName, pdfData);
+			}
+		} catch (error) {
+			console.error("Error processing PDF:", error);
+			new Notice(`Failed to load PDF: ${error.message}`);
+			return;
+		}
+		
+		// Wait for the view to be ready
+		await this.updateViewMode(viewType, leaf);
+		
+		// Now ensure the editor is ready before continuing
+		await this.waitForEditor(10, 100); // Try for up to 1 second (10 attempts * 100ms)
+		
+		if (!this.currTldrawEditor) {
+			new Notice("Failed to initialize the editor. Please try again.");
+			return;
+		}
+		
+		try {
+			// Create assets for PDF pages
+			this.currTldrawEditor.createAssets(
+				pdfResult.pages.map((page) => ({
+					id: page.assetId as TLAssetId,
+					typeName: 'asset',
+					type: 'image',
+					meta: {},
+					props: {
+						w: page.bounds.w,
+						h: page.bounds.h,
+						mimeType: 'image/png',
+						src: page.src,
+						name: 'page',
+						isAnimated: false,
+					},
+				}))
+			);
+	
+			// Create shapes for PDF pages
+			this.currTldrawEditor.createShapes(
+				pdfResult.pages.map((page) => ({
+					id: page.shapeId as TLShapeId,
+					type: 'image',
+					x: page.bounds.x,
+					y: page.bounds.y,
+					isLocked: true,
+					props: {
+						assetId: page.assetId as TLAssetId,
+						w: page.bounds.w,
+						h: page.bounds.h,
+					},
+				}))
+			);
+	
+			// Apply PDF-specific behavior
+			this.applyPdfBehavior(pdfResult);
+			
+		} catch (error) {
+			console.error("Error rendering PDF:", error);
+			new Notice(`Failed to render PDF: ${error.message}`);
+		}
+	}
+	
+	// Add this helper method to wait for the editor to be initialize
 
 // Add this helper method to wait for the editor to be initialized
 private async waitForEditor(attempts: number, delay: number): Promise<void> {
