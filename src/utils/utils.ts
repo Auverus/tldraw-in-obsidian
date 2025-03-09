@@ -111,7 +111,8 @@ export const isValidViewType = (str: string): str is ViewType => {
  * @returns 
  */
 export async function createAttachmentFilepath(fileManager: FileManager, attachmentFilename: string, attachTo?: TFile) {
-	const attachmentPath = await (fileManager.getAvailablePathForAttachment(attachmentFilename, attachTo?.path) as Promise<string>);
+	// Use type assertion to access the method that might exist at runtime but isn't in type definitions
+	const attachmentPath = await ((fileManager as any).getAvailablePathForAttachment(attachmentFilename, attachTo?.path) as Promise<string>);
 	const filename = pathBasename(attachmentPath);
 	const folder = attachmentPath.slice(0, -(filename.length + 1));
 	return {

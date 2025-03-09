@@ -60,7 +60,7 @@ export default class TldrawStoreExistsIndexedDBModal extends Modal {
 
         this.modalEl.addClass('ptl-compare-modal');
 
-        this.setTitle(`Conflict resolver - ${tFile.path}`);
+        this.titleEl.setText(`Conflict resolver - ${tFile.path}`);
 
         this.contentEl.addClass('ptl-compare-modal-content');
 

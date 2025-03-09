@@ -61,7 +61,7 @@ import { getTldrawFileDestination } from "./obsidian/plugin/file-destination";
 import { tldrawFileToJson } from "./utils/tldraw-file/tldraw-file-to-json";
 import UserSettingsManager from "./obsidian/settings/UserSettingsManager";
 import * as pdfjs from 'pdfjs-dist';
-import { Pdf, PdfPage } from "./utils/file"; // Add this import
+import { Pdf, PdfPage, loadPdf} from "./utils/file"; // Add this import
 @pluginBuild
 export default class TldrawPlugin extends Plugin {
 	// status bar stuff:
@@ -1140,12 +1140,12 @@ private async waitForEditor(attempts: number, delay: number): Promise<void> {
 // 	}
 // }
 
-async function loadPdf(name: string, arrayBuffer: ArrayBuffer): Promise<Pdf> {
+async function loadPdftot(name: string, arrayBuffer: ArrayBuffer): Promise<Pdf> {
     try {
         // Set the worker source if not already set
         if (!pdfjs.GlobalWorkerOptions.workerSrc) {
             pdfjs.GlobalWorkerOptions.workerSrc = 
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js';
         }
         
         // Load the PDF document
