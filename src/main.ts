@@ -142,6 +142,8 @@ export default class TldrawPlugin extends Plugin {
 
 		// switches to the tldraw view mode on initial launch
 		this.switchToTldrawViewAfterLoad();
+		
+		this.addOpenInTldrawButtonToPDFViews();
 
 		// Change how tldraw files are displayed when reading the document, e.g. when it is embed in another Obsidian document.
 		this.registerMarkdownPostProcessor((e, c) => markdownPostProcessor(this, e, c))
@@ -163,7 +165,7 @@ export default class TldrawPlugin extends Plugin {
 		this.register(
 			around(WorkspaceLeaf.prototype, {
 				setViewState(next) {
-					return function (state: ViewState, ...rest: any[]) {
+					return function (this: WorkspaceLeaf, state: ViewState, ...rest: any[]) {
 						const leaf: WorkspaceLeaf = this;
 						const rstate = state.state; // "real" state
 						const filePath = rstate?.file as string;
@@ -362,7 +364,77 @@ export default class TldrawPlugin extends Plugin {
 			state: { ...leaf.view.getState(), manuallyTriggered: true },
 		} as ViewState);
 	};
-
+	public addOpenInTldrawButtonToPDFViews() {
+		// Find all PDF views
+		const pdfViews = this.app.workspace.getLeavesOfType("pdf");
+		
+		for (const leaf of pdfViews) {
+		  this.addOpenInTldrawButtonToPDF(leaf);
+		}
+		
+		// Register an event to add the button to new PDF views
+		  this.registerEvent(
+		  this.app.workspace.on("file-open", (file) => {
+			if (file && file.extension === "pdf") {
+			  // Get active PDF leaf using app.workspace.activeLeaf
+			  const pdfLeaves = this.app.workspace.getLeavesOfType("pdf");
+			  const activeLeaf = pdfLeaves.find(leaf => leaf === this.app.workspace.activeLeaf);
+			  if (activeLeaf) {
+				this.addOpenInTldrawButtonToPDF(activeLeaf);
+			  }
+			}
+		  })
+		);
+	  }
+	  
+	  private addOpenInTldrawButtonToPDF(leaf: WorkspaceLeaf) {
+		// Get the PDF view
+		const view = leaf.view;
+		if (!view || !view.containerEl) return;
+		
+		// Find the toolbar
+		const toolbars = view.containerEl.getElementsByClassName("pdf-toolbar");
+		if (!toolbars.length) return;
+		
+		const toolbar = toolbars[0] as HTMLElement;
+		
+		// Check if button already exists
+		const existingButton = toolbar.querySelector('.tldraw-pdf-button');
+		if (existingButton) return;
+		
+		// Create button
+		const button = document.createElement('button');
+		button.className = 'tldraw-pdf-button pdf-toolbar-button';
+		button.setAttribute('aria-label', 'Open in TLDraw');
+		button.innerHTML = `<svg width="18" height="18" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+		  <path d="M7.5 0.875C3.83152 0.875 0.875 3.83152 0.875 7.5C0.875 11.1685 3.83152 14.125 7.5 14.125C11.1685 14.125 14.125 11.1685 14.125 7.5C14.125 3.83152 11.1685 0.875 7.5 0.875ZM7.5 1.825C10.6458 1.825 13.175 4.35417 13.175 7.5C13.175 10.6458 10.6458 13.175 7.5 13.175C4.35417 13.175 1.825 10.6458 1.825 7.5C1.825 4.35417 4.35417 1.825 7.5 1.825ZM4.2 9.225L4.90979 8.51521L6.55 10.1554V4.625H7.5V10.1554L9.14021 8.51521L9.85 9.225L7.5 11.575L4.2 9.225Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path>
+		</svg>`;
+		
+		button.addEventListener('click', async () => {
+		  try {
+			// Fix: Use type assertion for file property
+			const file = (view as any).file as TFile | null;
+			if (!file) {
+			  new Notice("Cannot find PDF file");
+			  return;
+			}
+			
+			// Get PDF data as ArrayBuffer
+			const pdfData = await this.app.vault.readBinary(file);
+			
+			// Open in TLDraw
+			await this.openPDF(pdfData, 'new-tab');
+			
+			new Notice("PDF opened in TLDraw");
+		  } catch (error) {
+			console.error("Failed to open PDF in TLDraw:", error);
+			new Notice(`Failed to open PDF in TLDraw: ${error.message}`);
+		  }
+		});
+		
+		// Add to toolbar
+		toolbar.appendChild(button);
+	  }
 	/**
 	 * the leafFileViewMode ID is a combination of the leaf (or tab) id and the file in that tab's path. This is how we can look up what view mode each leaf-file combo has been set.
 	 * @param leaf

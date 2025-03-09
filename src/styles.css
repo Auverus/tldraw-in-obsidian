@@ -375,3 +375,14 @@ div[data-type="tldraw-read-only"] .view-content.tldraw-view-content {
 	background-color: var(--interactive-accent);
 	color: var(--text-on-accent);
 }
+.tldraw-pdf-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.tldraw-pdf-button:hover {
+    background-color: var(--interactive-hover);
+}
