@@ -364,6 +364,49 @@ export default class TldrawPlugin extends Plugin {
 			state: { ...leaf.view.getState(), manuallyTriggered: true },
 		} as ViewState);
 	};
+
+	public async processPdfInEditor(pdf: Pdf): Promise<void> {
+		if (!this.currTldrawEditor) {
+			throw new Error("Editor not initialized");
+		}
+		
+		// Create assets for PDF pages
+		this.currTldrawEditor.createAssets(
+			pdf.pages.map((page) => ({
+				id: page.assetId as TLAssetId,
+				typeName: 'asset',
+				type: 'image',
+				meta: {},
+				props: {
+					w: page.bounds.w,
+					h: page.bounds.h,
+					mimeType: 'image/png',
+					src: page.src,
+					name: 'page',
+					isAnimated: false,
+				},
+			}))
+		);
+	
+		// Create shapes for PDF pages
+		this.currTldrawEditor.createShapes(
+			pdf.pages.map((page) => ({
+				id: page.shapeId as TLShapeId,
+				type: 'image',
+				x: page.bounds.x,
+				y: page.bounds.y,
+				isLocked: true,
+				props: {
+					assetId: page.assetId as TLAssetId,
+					w: page.bounds.w,
+					h: page.bounds.h,
+				},
+			}))
+		);
+	
+		// Apply PDF-specific behavior
+		this.applyPdfBehavior(pdf);
+	}
 	public addOpenInTldrawButtonToPDFViews() {
 		// Find all PDF views
 		const pdfViews = this.app.workspace.getLeavesOfType("pdf");
@@ -411,26 +454,62 @@ export default class TldrawPlugin extends Plugin {
 		</svg>`;
 		
 		button.addEventListener('click', async () => {
-		  try {
-			// Fix: Use type assertion for file property
-			const file = (view as any).file as TFile | null;
-			if (!file) {
-			  new Notice("Cannot find PDF file");
-			  return;
+			try {
+			  const file = (view as any).file as TFile | null;
+			  if (!file) {
+				new Notice("Cannot find PDF file");
+				return;
+			  }
+			  
+			  // Get PDF data as ArrayBuffer
+			  const pdfData = await this.app.vault.readBinary(file);
+			  
+			  // Create the tldraw file first
+			  const pdfFile = await this.createUntitledTldrFile();
+			  
+			  // Open the file in a new tab
+			  const newLeaf = this.app.workspace.getLeaf(true);
+			  await newLeaf.openFile(pdfFile);
+			  
+			  // Update to TLDraw view mode
+			  await this.updateViewMode(VIEW_TYPE_TLDRAW, newLeaf);
+			  
+			  // Instead of immediately trying to process the PDF, set up a MutationObserver
+			  // to wait for the TLDraw editor container to be fully added to the DOM
+			  const waitForEditor = () => {
+				// Set up a wait interval that's more patient
+				let attempts = 0;
+				const maxAttempts = 50; // 5 seconds total
+				const checkInterval = setInterval(async () => {
+				  attempts++;
+				  
+				  if (this.currTldrawEditor) {
+					// Editor is ready, process the PDF
+					clearInterval(checkInterval);
+					try {
+					  const loadedPdf = await loadPdf(file.name, pdfData);
+					  await this.processPdfInEditor(loadedPdf);
+					  new Notice("PDF opened in TLDraw");
+					} catch (err) {
+					  console.error("Failed to process PDF:", err);
+					  new Notice(`Failed to process PDF: ${err.message}`);
+					}
+				  } else if (attempts >= maxAttempts) {
+					// Give up after max attempts
+					clearInterval(checkInterval);
+					new Notice("Could not initialize the editor in time. Try manually importing the PDF.");
+				  }
+				}, 100);
+			  };
+			  
+			  // Start waiting for the editor
+			  waitForEditor();
+			  
+			} catch (error) {
+			  console.error("Failed to open PDF in TLDraw:", error);
+			  new Notice(`Failed to open PDF in TLDraw: ${error.message}`);
 			}
-			
-			// Get PDF data as ArrayBuffer
-			const pdfData = await this.app.vault.readBinary(file);
-			
-			// Open in TLDraw
-			await this.openPDF(pdfData, 'new-tab');
-			
-			new Notice("PDF opened in TLDraw");
-		  } catch (error) {
-			console.error("Failed to open PDF in TLDraw:", error);
-			new Notice(`Failed to open PDF in TLDraw: ${error.message}`);
-		  }
-		});
+		  });
 		
 		// Add to toolbar
 		toolbar.appendChild(button);
