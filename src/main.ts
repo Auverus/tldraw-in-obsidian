@@ -143,8 +143,20 @@ export default class TldrawPlugin extends Plugin {
 		// switches to the tldraw view mode on initial launch
 		this.switchToTldrawViewAfterLoad();
 		
-		this.addOpenInTldrawButtonToPDFViews();
+    // Wait for layout to be ready before adding PDF buttons
+    this.app.workspace.onLayoutReady(() => {
+        this.addOpenInTldrawButtonToPDFViews();
+    });
 
+    // switches to the tldraw view mode on initial launch
+    this.switchToTldrawViewAfterLoad();
+    
+    // Register for layout changes to catch PDF views that appear later
+    this.registerEvent(
+        this.app.workspace.on("layout-change", () => {
+            this.addOpenInTldrawButtonToPDFViews();
+        })
+    );
 		// Change how tldraw files are displayed when reading the document, e.g. when it is embed in another Obsidian document.
 		this.registerMarkdownPostProcessor((e, c) => markdownPostProcessor(this, e, c))
 
