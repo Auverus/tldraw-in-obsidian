@@ -62,6 +62,7 @@ import { tldrawFileToJson } from "./utils/tldraw-file/tldraw-file-to-json";
 import UserSettingsManager from "./obsidian/settings/UserSettingsManager";
 import * as pdfjs from 'pdfjs-dist';
 import { Pdf, PdfPage, loadPdf} from "./utils/file"; // Add this import
+import { ResolutionSelectionModal } from "./obsidian/modal/ResolutionSelectionModal";
 @pluginBuild
 export default class TldrawPlugin extends Plugin {
 	// status bar stuff:
@@ -472,66 +473,67 @@ export default class TldrawPlugin extends Plugin {
 				new Notice("Cannot find PDF file");
 				return;
 			  }
-			  
-			  // Get PDF data as ArrayBuffer
+		
+			  // 1. Get PDF data
 			  const pdfData = await this.app.vault.readBinary(file);
 			  
-			  // Create the tldraw file first
+			  // 2. Show resolution dialog and wait for user input
+			  const modal = new ResolutionSelectionModal(this.app);
+			  const resolution = await modal.openAndGetResolution();
+			  
+			  if (!resolution) {
+				// User cancelled
+				return;
+			  }
+		
+			  // 3. Create the tldraw file
 			  const pdfFile = await this.createUntitledTldrFile();
 			  
-			  // Open the file in a new tab
+			  // 4. Open the file in a new tab
 			  const newLeaf = this.app.workspace.getLeaf(true);
 			  await newLeaf.openFile(pdfFile);
 			  
-			  // Update to TLDraw view mode
+			  // 5. Set the view mode
 			  await this.updateViewMode(VIEW_TYPE_TLDRAW, newLeaf);
 			  
-			  // Instead of immediately trying to process the PDF, set up a MutationObserver
-			  // to wait for the TLDraw editor container to be fully added to the DOM
-			  const waitForEditor = () => {
-				// Set up a wait interval that's more patient
-				let attempts = 0;
-				const maxAttempts = 50; // 5 seconds total
-				const checkInterval = setInterval(async () => {
-				  attempts++;
-				  
-				  if (this.currTldrawEditor) {
-					// Editor is ready, process the PDF
-					clearInterval(checkInterval);
-					try {
-					  const loadedPdf = await loadPdf(file.name, pdfData);
-					  await this.processPdfInEditor(loadedPdf);
-					  new Notice("PDF opened in TLDraw");
-					  setTimeout(() => {
-						new Notice('Reloading Obsidian to reset PDF environment...');
-						setTimeout(() => {
-							(this.app as any).commands.executeCommandById('app:reload');
-						}, 1500); // Give the user a moment to see the notice
-					}, 1000); // Short delay to ensure PDF processing is complete	
-					} catch (err) {
-					  console.error("Failed to process PDF:", err);
-					  new Notice(`Failed to process PDF: ${err.message}`);
-					}
-				  } else if (attempts >= maxAttempts) {
-					// Give up after max attempts
-					clearInterval(checkInterval);
-					new Notice("Could not initialize the editor in time. Try manually importing the PDF.");
-				  }
-				}, 100);
-			  };
+			  // 6. Wait for editor initialization
+			  let editorReady = false;
+			  for (let attempt = 0; attempt < 50; attempt++) {
+				if (this.currTldrawEditor) {
+				  editorReady = true;
+				  break;
+				}
+				await new Promise(resolve => setTimeout(resolve, 100));
+			  }
 			  
-			  // Start waiting for the editor
-			  waitForEditor();
+			  if (!editorReady) {
+				new Notice("Editor initialization timed out. Please try again.");
+				return;
+			  }
+			  
+			  // 7. Process the PDF with the selected resolution
+			  const loadedPdf = await loadPdf(file.name, pdfData, resolution);
+			  await this.processPdfInEditor(loadedPdf);
+			  
+			  new Notice(`PDF opened at ${resolution}x resolution`);
+			  
+			  // 8. Schedule Obsidian reload to fix PDF.js environment
+			  setTimeout(() => {
+				new Notice('Reloading Obsidian to reset PDF environment...');
+				setTimeout(() => {
+				  (this.app as any).commands.executeCommandById('app:reload');
+				}, 1500);
+			  }, 1000);
 			  
 			} catch (error) {
 			  console.error("Failed to open PDF in TLDraw:", error);
 			  new Notice(`Failed to open PDF in TLDraw: ${error.message}`);
 			}
 		  });
-		
-		// Add to toolbar
-		toolbar.appendChild(button);
-	  }
+		  
+		  // Add to toolbar
+		  toolbar.appendChild(button);
+		}
 	/**
 	 * the leafFileViewMode ID is a combination of the leaf (or tab) id and the file in that tab's path. This is how we can look up what view mode each leaf-file combo has been set.
 	 * @param leaf

@@ -265,7 +265,152 @@ const pageSpacing = 32
 // 		source,
 // 	}
 // }
-export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
+// export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
+//     const PdfJS = await import('pdfjs-dist')
+//     // Import the worker directly from the package
+//     // Set the worker to use the imported worker
+//      const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+// //	const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;   
+// // 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+// //    const pdf = await PdfJS.getDocument(source.slice(0)).promise
+// // 	console.log(originalWorkerSrc);
+// //let PdfJS: any = null;
+// //let PdfWorker: any = null;
+// let pdf: any = null;
+
+// const originalPdfjsLib = (window as any).PdfJS;
+// const originalGlobalWorkerOptions = (window as any).PdfJS;//GlobalWorkerOptions;
+// //const originalWorkerSrc = (globalThis as any).pdfjsLib?.GlobalWorkerOptions?.workerSrc;
+// 	//const worker = new PdfJS.PDFWorker();
+// try{    
+//     // Use the worker directly in the document loading options
+//     // const pdf = await PdfJS.getDocument({
+//     //     data: source.slice(0),
+//     //     worker: worker
+//     // }).promise;
+// 	//const pdf = await PdfJS.getDocument(source.slice(0)).promise;
+// //         PdfJS = await import('pdfjs-dist');
+// // PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+
+// // Save original worker source
+// //console.log("Original worker source:", originalWorkerSrc);
+
+// // Set up a worker for this specific operation
+// // PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
+// //PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
+// // Process PDF
+// 	pdf = await PdfJS.getDocument({
+// 	data: source.slice(0),
+// //	disableWorker: true // Use worker for better performance
+// }).promise;
+//     const canvas = window.document.createElement('canvas')
+//     const context = canvas.getContext('2d')
+//     if (!context) throw new Error('Failed to create canvas context')
+
+//     const visualScale = 1.5
+//     const scale = window.devicePixelRatio
+
+//     let top = 0
+//     let widest = 0
+//     const pages: PdfPage[] = []
+//     for (let i = 1; i <= pdf.numPages; i++) {
+//         const page = await pdf.getPage(i)
+//         const viewport = page.getViewport({ scale: scale * visualScale })
+//         canvas.width = viewport.width
+//         canvas.height = viewport.height
+//         const renderContext = {
+//             canvasContext: context,
+//             viewport,
+//         }
+//         await page.render(renderContext).promise
+
+//         const width = viewport.width / scale
+//         const height = viewport.height / scale
+//         pages.push({
+//             src: canvas.toDataURL(),
+//             bounds: new Box(0, top, width, height),
+//             assetId: `asset:${AssetRecordType.createId()}`, // Add "asset:" prefix here
+//             shapeId: createShapeId(),
+//         })
+//         top += height + pageSpacing
+//         widest = Math.max(widest, width)
+//     }
+//     canvas.width = 0
+//     canvas.height = 0
+
+//     for (const page of pages) {
+//         page.bounds.x = (widest - page.bounds.width) / 2
+//     }
+
+//     return {
+//         name,
+//         pages,
+//         source,
+//     }
+// }finally {
+// 	// Always destroy the worker when done, even if there's an error
+// 	//worker.destroy();
+// 	// console.log('Destroying PDF worker');
+
+//     // PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+
+// 	// try {
+// 	// 	// Restore original worker source
+// 	// 	if (PdfJS && originalWorkerSrc !== undefined) {
+// 	// 		PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+// 	// 	} else if (PdfJS) {
+// 	// 		// If no original value, set to undefined to remove it
+// 	// 		PdfJS.GlobalWorkerOptions.workerSrc = undefined;
+// 	// 	}
+		
+// 	// 	// Close the document if it exists
+// 	// 	if (pdf) {
+// 	// 		pdf.cleanup();
+// 	// 		pdf.destroy();
+// 	// 	}
+		
+// 	// 	// Attempt to help garbage collection by removing references
+// 	// 	pdf = null;
+// 	// 	PdfJS = null;
+// 	// 	PdfWorker = null;
+		
+// 	// 	// Force garbage collection if possible (though this may not work in all browsers)
+// 	// 	if (typeof window.gc === 'function') {
+// 	// 		try {
+// 	// 			window.gc();
+// 	// 		} catch (e) {
+// 	// 			console.log("Failed to force garbage collection");
+// 	// 		}
+// 	// 	}
+		
+// 	// 	console.log('PDF.js resources cleanup attempted');
+// 	// } catch (cleanupError) {
+// 	// 	console.error('Error during PDF.js cleanup:', cleanupError);
+// 	// }
+
+// 	// if (PdfJS) {
+// 	// 	PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+// 	// }
+
+// 	if (originalPdfjsLib) {
+// 		(window as any).PdfJS = originalPdfjsLib;
+// 		if (originalGlobalWorkerOptions) {
+// 			(window as any).PdfJS.GlobalWorkerOptions = originalGlobalWorkerOptions;
+// 		}
+// 	} else {
+// 		// If Obsidian didn't have pdfjsLib set up yet, remove our version
+// 		delete (window as any).PdfJS;
+// 	}
+// }}
+
+export async function loadPdf(name: string, source: ArrayBuffer, resolution: number = 1.5): Promise<Pdf> {
+    const PdfJS = await import('pdfjs-dist')
+    
+    // Save the original worker source to restore later
+    const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;
+    
+    try {
+        // Use a CDN URL that will work in Obsidian's environment
     const PdfJS = await import('pdfjs-dist')
     // Import the worker directly from the package
     // Set the worker to use the imported worker
@@ -274,132 +419,66 @@ export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
 // 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
 //    const pdf = await PdfJS.getDocument(source.slice(0)).promise
 // 	console.log(originalWorkerSrc);
-//let PdfJS: any = null;
-//let PdfWorker: any = null;
-let pdf: any = null;
+        
+        // Process in main thread without worker to avoid conflicts
+        const pdf = await PdfJS.getDocument({
+            data: source.slice(0),
+     //       disableWorker: true  // Process in main thread
+        }).promise;
 
-const originalPdfjsLib = (window as any).PdfJS;
-const originalGlobalWorkerOptions = (window as any).PdfJS;//GlobalWorkerOptions;
-//const originalWorkerSrc = (globalThis as any).pdfjsLib?.GlobalWorkerOptions?.workerSrc;
-	//const worker = new PdfJS.PDFWorker();
-try{    
-    // Use the worker directly in the document loading options
-    // const pdf = await PdfJS.getDocument({
-    //     data: source.slice(0),
-    //     worker: worker
-    // }).promise;
-	//const pdf = await PdfJS.getDocument(source.slice(0)).promise;
-//         PdfJS = await import('pdfjs-dist');
-// PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Failed to create canvas context');
 
-// Save original worker source
-//console.log("Original worker source:", originalWorkerSrc);
+        // Use the provided resolution instead of hardcoded value
+        const visualScale = resolution;
+        const scale = window.devicePixelRatio;
 
-// Set up a worker for this specific operation
-// PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
-//PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
-// Process PDF
-	pdf = await PdfJS.getDocument({
-	data: source.slice(0),
-//	disableWorker: true // Use worker for better performance
-}).promise;
-    const canvas = window.document.createElement('canvas')
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('Failed to create canvas context')
+        let top = 0;
+        let widest = 0;
+        const pages: PdfPage[] = [];
+        
+        // Process each page
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: scale * visualScale });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            const renderContext = {
+                canvasContext: context,
+                viewport,
+            };
+            await page.render(renderContext).promise;
 
-    const visualScale = 1.5
-    const scale = window.devicePixelRatio
-
-    let top = 0
-    let widest = 0
-    const pages: PdfPage[] = []
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i)
-        const viewport = page.getViewport({ scale: scale * visualScale })
-        canvas.width = viewport.width
-        canvas.height = viewport.height
-        const renderContext = {
-            canvasContext: context,
-            viewport,
+            const width = viewport.width / scale;
+            const height = viewport.height / scale;
+            
+            pages.push({
+                src: canvas.toDataURL(),
+                bounds: new Box(0, top, width, height),
+                assetId: `asset:${AssetRecordType.createId()}`,
+                shapeId: createShapeId(),
+            });
+            
+            top += height + pageSpacing;
+            widest = Math.max(widest, width);
         }
-        await page.render(renderContext).promise
+        
+        canvas.width = 0;
+        canvas.height = 0;
 
-        const width = viewport.width / scale
-        const height = viewport.height / scale
-        pages.push({
-            src: canvas.toDataURL(),
-            bounds: new Box(0, top, width, height),
-            assetId: `asset:${AssetRecordType.createId()}`, // Add "asset:" prefix here
-            shapeId: createShapeId(),
-        })
-        top += height + pageSpacing
-        widest = Math.max(widest, width)
+        for (const page of pages) {
+            page.bounds.x = (widest - page.bounds.width) / 2;
+        }
+
+        return {
+            name,
+            pages,
+            source,
+        };
+    } finally {
+        // Restore the original worker source
+        PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
     }
-    canvas.width = 0
-    canvas.height = 0
-
-    for (const page of pages) {
-        page.bounds.x = (widest - page.bounds.width) / 2
-    }
-
-    return {
-        name,
-        pages,
-        source,
-    }
-}finally {
-	// Always destroy the worker when done, even if there's an error
-	//worker.destroy();
-	// console.log('Destroying PDF worker');
-
-    // PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
-
-	// try {
-	// 	// Restore original worker source
-	// 	if (PdfJS && originalWorkerSrc !== undefined) {
-	// 		PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
-	// 	} else if (PdfJS) {
-	// 		// If no original value, set to undefined to remove it
-	// 		PdfJS.GlobalWorkerOptions.workerSrc = undefined;
-	// 	}
-		
-	// 	// Close the document if it exists
-	// 	if (pdf) {
-	// 		pdf.cleanup();
-	// 		pdf.destroy();
-	// 	}
-		
-	// 	// Attempt to help garbage collection by removing references
-	// 	pdf = null;
-	// 	PdfJS = null;
-	// 	PdfWorker = null;
-		
-	// 	// Force garbage collection if possible (though this may not work in all browsers)
-	// 	if (typeof window.gc === 'function') {
-	// 		try {
-	// 			window.gc();
-	// 		} catch (e) {
-	// 			console.log("Failed to force garbage collection");
-	// 		}
-	// 	}
-		
-	// 	console.log('PDF.js resources cleanup attempted');
-	// } catch (cleanupError) {
-	// 	console.error('Error during PDF.js cleanup:', cleanupError);
-	// }
-
-	// if (PdfJS) {
-	// 	PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
-	// }
-
-	if (originalPdfjsLib) {
-		(window as any).PdfJS = originalPdfjsLib;
-		if (originalGlobalWorkerOptions) {
-			(window as any).PdfJS.GlobalWorkerOptions = originalGlobalWorkerOptions;
-		}
-	} else {
-		// If Obsidian didn't have pdfjsLib set up yet, remove our version
-		delete (window as any).PdfJS;
-	}
-}}
-
+}
