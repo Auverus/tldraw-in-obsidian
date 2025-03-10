@@ -269,10 +269,40 @@ export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
     const PdfJS = await import('pdfjs-dist')
     // Import the worker directly from the package
     // Set the worker to use the imported worker
-    const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-    PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
-    const pdf = await PdfJS.getDocument(source.slice(0)).promise
+     const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+//	const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;   
+// 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+//    const pdf = await PdfJS.getDocument(source.slice(0)).promise
+// 	console.log(originalWorkerSrc);
+//let PdfJS: any = null;
+//let PdfWorker: any = null;
+let pdf: any = null;
 
+const originalPdfjsLib = (window as any).PdfJS;
+const originalGlobalWorkerOptions = (window as any).PdfJS;//GlobalWorkerOptions;
+//const originalWorkerSrc = (globalThis as any).pdfjsLib?.GlobalWorkerOptions?.workerSrc;
+	//const worker = new PdfJS.PDFWorker();
+try{    
+    // Use the worker directly in the document loading options
+    // const pdf = await PdfJS.getDocument({
+    //     data: source.slice(0),
+    //     worker: worker
+    // }).promise;
+	//const pdf = await PdfJS.getDocument(source.slice(0)).promise;
+//         PdfJS = await import('pdfjs-dist');
+// PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+
+// Save original worker source
+//console.log("Original worker source:", originalWorkerSrc);
+
+// Set up a worker for this specific operation
+// PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
+//PdfJS.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.0/pdf.worker.min.js';
+// Process PDF
+	pdf = await PdfJS.getDocument({
+	data: source.slice(0),
+//	disableWorker: true // Use worker for better performance
+}).promise;
     const canvas = window.document.createElement('canvas')
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Failed to create canvas context')
@@ -317,4 +347,59 @@ export async function loadPdf(name: string, source: ArrayBuffer): Promise<Pdf> {
         pages,
         source,
     }
-}
+}finally {
+	// Always destroy the worker when done, even if there's an error
+	//worker.destroy();
+	// console.log('Destroying PDF worker');
+
+    // PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+
+	// try {
+	// 	// Restore original worker source
+	// 	if (PdfJS && originalWorkerSrc !== undefined) {
+	// 		PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+	// 	} else if (PdfJS) {
+	// 		// If no original value, set to undefined to remove it
+	// 		PdfJS.GlobalWorkerOptions.workerSrc = undefined;
+	// 	}
+		
+	// 	// Close the document if it exists
+	// 	if (pdf) {
+	// 		pdf.cleanup();
+	// 		pdf.destroy();
+	// 	}
+		
+	// 	// Attempt to help garbage collection by removing references
+	// 	pdf = null;
+	// 	PdfJS = null;
+	// 	PdfWorker = null;
+		
+	// 	// Force garbage collection if possible (though this may not work in all browsers)
+	// 	if (typeof window.gc === 'function') {
+	// 		try {
+	// 			window.gc();
+	// 		} catch (e) {
+	// 			console.log("Failed to force garbage collection");
+	// 		}
+	// 	}
+		
+	// 	console.log('PDF.js resources cleanup attempted');
+	// } catch (cleanupError) {
+	// 	console.error('Error during PDF.js cleanup:', cleanupError);
+	// }
+
+	// if (PdfJS) {
+	// 	PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+	// }
+
+	if (originalPdfjsLib) {
+		(window as any).PdfJS = originalPdfjsLib;
+		if (originalGlobalWorkerOptions) {
+			(window as any).PdfJS.GlobalWorkerOptions = originalGlobalWorkerOptions;
+		}
+	} else {
+		// If Obsidian didn't have pdfjsLib set up yet, remove our version
+		delete (window as any).PdfJS;
+	}
+}}
+

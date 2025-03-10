@@ -502,6 +502,12 @@ export default class TldrawPlugin extends Plugin {
 					  const loadedPdf = await loadPdf(file.name, pdfData);
 					  await this.processPdfInEditor(loadedPdf);
 					  new Notice("PDF opened in TLDraw");
+					  setTimeout(() => {
+						new Notice('Reloading Obsidian to reset PDF environment...');
+						setTimeout(() => {
+							(this.app as any).commands.executeCommandById('app:reload');
+						}, 1500); // Give the user a moment to see the notice
+					}, 1000); // Short delay to ensure PDF processing is complete	
 					} catch (err) {
 					  console.error("Failed to process PDF:", err);
 					  new Notice(`Failed to process PDF: ${err.message}`);
@@ -979,7 +985,7 @@ export default class TldrawPlugin extends Plugin {
 	
 			// Apply PDF-specific behavior
 			this.applyPdfBehavior(pdfResult);
-			
+
 		} catch (error) {
 			console.error("Error rendering PDF:", error);
 			new Notice(`Failed to render PDF: ${error.message}`);
