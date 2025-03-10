@@ -403,71 +403,177 @@ const pageSpacing = 32
 // 	}
 // }}
 
+// export async function loadPdf(name: string, source: ArrayBuffer, resolution: number = 1.5): Promise<Pdf> {
+//     const PdfJS = await import('pdfjs-dist')
+    
+//     // Save the original worker source to restore later
+//     const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;
+    
+//     try {
+//         // Use a CDN URL that will work in Obsidian's environment
+//     const PdfJS = await import('pdfjs-dist')
+//     // Import the worker directly from the package
+//     // Set the worker to use the imported worker
+//      const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+// //	const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;   
+// // 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+// //    const pdf = await PdfJS.getDocument(source.slice(0)).promise
+// // 	console.log(originalWorkerSrc);
+        
+//         // Process in main thread without worker to avoid conflicts
+//         const pdf = await PdfJS.getDocument({
+//             data: source.slice(0),
+//      //       disableWorker: true  // Process in main thread
+//         }).promise;
+
+//         const canvas = document.createElement('canvas');
+//         const context = canvas.getContext('2d');
+//         if (!context) throw new Error('Failed to create canvas context');
+
+//         // Use the provided resolution instead of hardcoded value
+//         const visualScale = resolution;
+//         const scale = window.devicePixelRatio;
+
+//         let top = 0;
+//         let widest = 0;
+//         const pages: PdfPage[] = [];
+        
+//         // Process each page
+//         for (let i = 1; i <= pdf.numPages; i++) {
+//             const page = await pdf.getPage(i);
+//             const viewport = page.getViewport({ scale: scale * visualScale });
+//             canvas.width = viewport.width;
+//             canvas.height = viewport.height;
+            
+//             const renderContext = {
+//                 canvasContext: context,
+//                 viewport,
+//             };
+//             await page.render(renderContext).promise;
+
+//             const width = viewport.width / scale;
+//             const height = viewport.height / scale;
+            
+//             pages.push({
+//                 src: canvas.toDataURL(),
+//                 bounds: new Box(0, top, width, height),
+//                 assetId: `asset:${AssetRecordType.createId()}`,
+//                 shapeId: createShapeId(),
+//             });
+            
+//             top += height + pageSpacing;
+//             widest = Math.max(widest, width);
+//         }
+        
+//         canvas.width = 0;
+//         canvas.height = 0;
+
+//         for (const page of pages) {
+//             page.bounds.x = (widest - page.bounds.width) / 2;
+//         }
+
+//         return {
+//             name,
+//             pages,
+//             source,
+//         };
+//     } finally {
+//         // Restore the original worker source
+//         PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+//     }
+// }
+
 export async function loadPdf(name: string, source: ArrayBuffer, resolution: number = 1.5): Promise<Pdf> {
-    const PdfJS = await import('pdfjs-dist')
+    const PdfJS = await import('pdfjs-dist');
     
     // Save the original worker source to restore later
     const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;
     
     try {
-        // Use a CDN URL that will work in Obsidian's environment
-    const PdfJS = await import('pdfjs-dist')
-    // Import the worker directly from the package
-    // Set the worker to use the imported worker
-     const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-//	const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;   
-// 	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
-//    const pdf = await PdfJS.getDocument(source.slice(0)).promise
-// 	console.log(originalWorkerSrc);
+        // Set worker source using CDN
+//	const PdfJS = await import('pdfjs-dist')
+	// Import the worker directly from the package
+	// Set the worker to use the imported worker
+	const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
+	const pdf = await PdfJS.getDocument(source.slice(0)).promise
+
         
-        // Process in main thread without worker to avoid conflicts
-        const pdf = await PdfJS.getDocument({
-            data: source.slice(0),
-     //       disableWorker: true  // Process in main thread
-        }).promise;
+//         // Process PDF in main thread for better compatibility
+//         const pdf = await PdfJS.getDocument({
+//             data: source.slice(0),
+// //            disableWorker: true  // Process in main thread for better mobile compatibility
+//         }).promise;
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) throw new Error('Failed to create canvas context');
 
-        // Use the provided resolution instead of hardcoded value
-        const visualScale = resolution;
+        // Check if we're on mobile and adjust resolution if needed
+        const isMobile = window.innerWidth < 768;
+        
+        // Use lower resolution on mobile devices
+        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
         const scale = window.devicePixelRatio;
 
         let top = 0;
         let widest = 0;
         const pages: PdfPage[] = [];
+        const pageSpacing = 32;
         
         // Process each page
         for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: scale * visualScale });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            
-            const renderContext = {
-                canvasContext: context,
-                viewport,
-            };
-            await page.render(renderContext).promise;
+            try {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: scale * visualScale });
+                
+                // For mobile devices, ensure canvas size is reasonable
+                if (isMobile && (viewport.width > 2048 || viewport.height > 2048)) {
+                    const scaleFactor = 2048 / Math.max(viewport.width, viewport.height);
+                    viewport.width *= scaleFactor;
+                    viewport.height *= scaleFactor;
+                }
+                
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                const renderContext = {
+                    canvasContext: context,
+                    viewport,
+                };
+                
+                await page.render(renderContext).promise;
 
-            const width = viewport.width / scale;
-            const height = viewport.height / scale;
-            
-            pages.push({
-                src: canvas.toDataURL(),
-                bounds: new Box(0, top, width, height),
-                assetId: `asset:${AssetRecordType.createId()}`,
-                shapeId: createShapeId(),
-            });
-            
-            top += height + pageSpacing;
-            widest = Math.max(widest, width);
+                // For mobile, use lower JPEG quality instead of PNG
+                const imageType = isMobile ? 'image/jpeg' : 'image/png';
+                const imageQuality = isMobile ? 0.7 : 1.0;
+                
+                const width = viewport.width / scale;
+                const height = viewport.height / scale;
+                
+                pages.push({
+                    src: canvas.toDataURL(imageType, imageQuality),
+                    bounds: new Box(0, top, width, height),
+                    assetId: `asset:${AssetRecordType.createId()}`,
+                    shapeId: createShapeId(),
+                });
+                
+                top += height + pageSpacing;
+                widest = Math.max(widest, width);
+                
+                // Clean up canvas between pages to save memory
+                context.clearRect(0, 0, canvas.width, canvas.height);
+            } catch (pageError) {
+                console.error(`Error rendering page ${i}:`, pageError);
+                // Continue with other pages if possible
+            }
         }
         
+        // Clean up canvas
         canvas.width = 0;
         canvas.height = 0;
 
+        // Position pages
         for (const page of pages) {
             page.bounds.x = (widest - page.bounds.width) / 2;
         }
@@ -477,8 +583,11 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
             pages,
             source,
         };
+    } catch (error) {
+        console.error("Failed to process PDF:", error);
+        throw new Error(`Failed to process PDF: ${error.message}`);
     } finally {
-        // Restore the original worker source
+        // Restore original worker source
         PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
     }
 }
