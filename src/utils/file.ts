@@ -510,10 +510,10 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
         if (!context) throw new Error('Failed to create canvas context');
 
         // Check if we're on mobile and adjust resolution if needed
-        const isMobile = window.innerWidth < 768;
+	const isMobile = Platform.isMobile;
         
         // Use lower resolution on mobile devices
-        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
+       const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
         const scale = window.devicePixelRatio;
 
         let top = 0;
