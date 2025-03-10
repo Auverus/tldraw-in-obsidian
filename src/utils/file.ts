@@ -527,12 +527,12 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
                 const page = await pdf.getPage(i);
                 const viewport = page.getViewport({ scale: scale * visualScale });
                 
-                // For mobile devices, ensure canvas size is reasonable
-                if (isMobile && (viewport.width > 2048 || viewport.height > 2048)) {
-                    const scaleFactor = 2048 / Math.max(viewport.width, viewport.height);
-                    viewport.width *= scaleFactor;
-                    viewport.height *= scaleFactor;
-                }
+                // // For mobile devices, ensure canvas size is reasonable
+                // if (isMobile && (viewport.width > 2048 || viewport.height > 2048)) {
+                //     const scaleFactor = 2048 / Math.max(viewport.width, viewport.height);
+                //     viewport.width *= scaleFactor;
+                //     viewport.height *= scaleFactor;
+                // }
                 
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
