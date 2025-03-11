@@ -510,8 +510,8 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
         const isMobile = Platform.isMobile;
         
         // Balance quality and performance
-//        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
-        const scale = resolution;
+        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
+        const scale = window.devicePixelRatio;
         
         let top = 0;
         let widest = 0;
@@ -521,7 +521,7 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
         for (let i = 1; i <= pdf.numPages; i++) {
             try {
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: scale });
+                const viewport = page.getViewport({ scale: scale* visualScale });
                 
                 // Limit canvas dimensions (prevents excessive memory use)
                 const maxDimension = isMobile ? 2048 : 4096;
@@ -533,7 +533,7 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
                 const renderContext = {
                     canvasContext: context,
                     viewport: page.getViewport({ 
-                        scale: scale *  canvasScale
+                        scale: scale * visualScale * canvasScale
                     }),
                     enableWebGL: true, // Use WebGL if available for faster rendering
                 };
