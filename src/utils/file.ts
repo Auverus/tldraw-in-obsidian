@@ -485,74 +485,70 @@ const pageSpacing = 32
 
 export async function loadPdf(name: string, source: ArrayBuffer, resolution: number = 1.5): Promise<Pdf> {
     const PdfJS = await import('pdfjs-dist');
-    
-    // Save the original worker source to restore later
     const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;
     
     try {
-        // Set worker source using CDN
-//	const PdfJS = await import('pdfjs-dist')
-	// Import the worker directly from the package
-	// Set the worker to use the imported worker
-	const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-	PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
-	const pdf = await PdfJS.getDocument(source.slice(0)).promise
-
+        // Import worker and setup
+        const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+        PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
         
-//         // Process PDF in main thread for better compatibility
-//         const pdf = await PdfJS.getDocument({
-//             data: source.slice(0),
-// //            disableWorker: true  // Process in main thread for better mobile compatibility
-//         }).promise;
+        // Load PDF document with optimized settings
+        const pdf = await PdfJS.getDocument({
+            data: source.slice(0),
+//            disableWorker: Platform.isMobile, // Use main thread on mobile
+        }).promise;
 
         const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
+        const context = canvas.getContext('2d', {
+            alpha: false, // No transparency needed for PDF pages
+            willReadFrequently: true // Optimization for frequent pixel reads
+        });
+        
         if (!context) throw new Error('Failed to create canvas context');
 
-        // Check if we're on mobile and adjust resolution if needed
-	const isMobile = Platform.isMobile;
+        // Optimize resolution based on device
+        const isMobile = Platform.isMobile;
         
-        // Use lower resolution on mobile devices
-       const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
-        const scale = window.devicePixelRatio;
-
+        // Balance quality and performance
+//        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
+        const scale = resolution;
+        
         let top = 0;
         let widest = 0;
         const pages: PdfPage[] = [];
-        const pageSpacing = 32;
         
-        // Process each page
+        // Process each page with optimized image generation
         for (let i = 1; i <= pdf.numPages; i++) {
             try {
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: scale * visualScale });
+                const viewport = page.getViewport({ scale: scale });
                 
-                // // For mobile devices, ensure canvas size is reasonable
-                // if (isMobile && (viewport.width > 2048 || viewport.height > 2048)) {
-                //     const scaleFactor = 2048 / Math.max(viewport.width, viewport.height);
-                //     viewport.width *= scaleFactor;
-                //     viewport.height *= scaleFactor;
-                // }
+                // Limit canvas dimensions (prevents excessive memory use)
+                const maxDimension = isMobile ? 2048 : 4096;
+                const canvasScale = Math.min(1, maxDimension / Math.max(viewport.width, viewport.height));
                 
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
+                canvas.width = viewport.width * canvasScale;
+                canvas.height = viewport.height * canvasScale;
                 
                 const renderContext = {
                     canvasContext: context,
-                    viewport,
+                    viewport: page.getViewport({ 
+                        scale: scale *  canvasScale
+                    }),
+                    enableWebGL: true, // Use WebGL if available for faster rendering
                 };
                 
                 await page.render(renderContext).promise;
 
-                // For mobile, use lower JPEG quality instead of PNG
-                const imageType = isMobile ? 'image/jpeg' : 'image/png';
-                const imageQuality = isMobile ? 0.7 : 1.0;
+                // Optimize image format and quality based on content
+                const imageFormat = detectBestImageFormat(context, canvas);
+                const imageQuality = imageFormat === 'image/jpeg' ? 0.85 : 0.9;
                 
                 const width = viewport.width / scale;
                 const height = viewport.height / scale;
                 
                 pages.push({
-                    src: canvas.toDataURL(imageType, imageQuality),
+                    src: canvas.toDataURL(imageFormat, imageQuality),
                     bounds: new Box(0, top, width, height),
                     assetId: `asset:${AssetRecordType.createId()}`,
                     shapeId: createShapeId(),
@@ -561,15 +557,19 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
                 top += height + pageSpacing;
                 widest = Math.max(widest, width);
                 
-                // Clean up canvas between pages to save memory
+                // Clean canvas between pages
                 context.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Force garbage collection if too many pages
+                if (i % 10 === 0 && typeof window.gc === 'function') {
+                    try { window.gc(); } catch (e) {}
+                }
             } catch (pageError) {
                 console.error(`Error rendering page ${i}:`, pageError);
-                // Continue with other pages if possible
             }
         }
         
-        // Clean up canvas
+        // Clean up resources
         canvas.width = 0;
         canvas.height = 0;
 
@@ -587,7 +587,43 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
         console.error("Failed to process PDF:", error);
         throw new Error(`Failed to process PDF: ${error.message}`);
     } finally {
-        // Restore original worker source
         PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
+    }
+}
+
+// Helper function to determine best image format based on content
+function detectBestImageFormat(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement): string {
+    // Sample some pixels to detect if the page is mostly text (black/white)
+    // or has complex graphics/images
+    try {
+        const imageData = context.getImageData(0, 0, 
+            Math.min(canvas.width, 100), 
+            Math.min(canvas.height, 100));
+        
+        const data = imageData.data;
+        let colorCount = 0;
+        const colors = new Set();
+        
+        // Sample pixels to determine complexity
+        for (let i = 0; i < data.length; i += 16) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const colorKey = `${r},${g},${b}`;
+            colors.add(colorKey);
+            if (colors.size > 50) break; // Stop early if we detect many colors
+        }
+        
+        // Use WebP for browsers that support it
+        if (canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0) {
+            return 'image/webp';
+        }
+        
+        // Simple text pages with few colors work better as PNG
+        // Complex pages with many colors work better as JPEG
+        return colors.size < 20 ? 'image/png' : 'image/jpeg';
+    } catch (e) {
+        // Fallback to JPEG if we can't analyze the image
+        return 'image/jpeg';
     }
 }
