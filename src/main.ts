@@ -63,6 +63,8 @@ import UserSettingsManager from "./obsidian/settings/UserSettingsManager";
 import * as pdfjs from 'pdfjs-dist';
 import { Pdf, PdfPage, loadPdf} from "./utils/file"; // Add this import
 import { ResolutionSelectionModal } from "./obsidian/modal/ResolutionSelectionModal";
+import { PdfPageShapeUtil } from "./tldraw/PdfPageShape";
+import { PdfViewportManager } from "./tldraw/PdfViewPortMan";
 @pluginBuild
 export default class TldrawPlugin extends Plugin {
 	// status bar stuff:
@@ -78,10 +80,13 @@ export default class TldrawPlugin extends Plugin {
 	readonly tldrawFileMetadataListeners = new TldrawFileListenerMap(this);
 	readonly tlDataDocumentStoreManager = new TLDataDocumentStoreManager(this);
 	currTldrawEditor?: Editor;
-
+    private pdfKeyboardHandler?: (e: KeyboardEvent) => void;
+//    private pdfViewportManager: PdfViewportManager | null = null;
 	// misc:
 	embedBoundsSelectorIcon: string;
 	settings: TldrawPluginSettings;
+
+	private pdfViewportManager: PdfViewportManager | null = null;
 
 	async onload() {
 		this.registerView(
@@ -162,8 +167,31 @@ export default class TldrawPlugin extends Plugin {
 		this.registerMarkdownPostProcessor((e, c) => markdownPostProcessor(this, e, c))
 
 		this.registerExtensions(['tldr'], VIEW_TYPE_TLDRAW_FILE)
-	}
 
+		this.registerEditorComponent('shape', PdfPageShapeUtil);
+	}
+// Add this to your registerEditorComponent method:
+registerEditorComponent(type: 'shape' | 'tool', component: any) {
+    this.app.workspace.onLayoutReady(() => {
+        const registerComponent = () => {
+            if (this.currTldrawEditor) {
+                if (type === 'shape') {
+                    // Use the correct method - registerShapeUtil instead of store.registerShapeType
+                    this.currTldrawEditor.registerShapeUtil(component);
+                } else if (type === 'tool') {
+                    // Use the correct method for tool registration
+                    this.currTldrawEditor.registerTool(component);
+                }
+            }
+        };
+        
+        registerComponent();
+        
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', registerComponent)
+        );
+    });
+}
 	onunload() {
 		this.tlDataDocumentStoreManager.dispose()
 		this.unsubscribeToViewModeState();
@@ -378,48 +406,152 @@ export default class TldrawPlugin extends Plugin {
 		} as ViewState);
 	};
 
-	public async processPdfInEditor(pdf: Pdf): Promise<void> {
-		if (!this.currTldrawEditor) {
-			throw new Error("Editor not initialized");
-		}
+	// public async processPdfInEditor(pdf: Pdf): Promise<void> {
+	// 	if (!this.currTldrawEditor) {
+	// 		throw new Error("Editor not initialized");
+	// 	}
 		
-		// Create assets for PDF pages
-		this.currTldrawEditor.createAssets(
-			pdf.pages.map((page) => ({
-				id: page.assetId as TLAssetId,
-				typeName: 'asset',
-				type: 'image',
-				meta: {},
-				props: {
-					w: page.bounds.w,
-					h: page.bounds.h,
-					mimeType: 'image/png',
-					src: page.src,
-					name: 'page',
-					isAnimated: false,
-				},
-			}))
-		);
+	// 	// Create assets for PDF pages
+	// 	this.currTldrawEditor.createAssets(
+	// 		pdf.pages.map((page) => ({
+	// 			id: page.assetId as TLAssetId,
+	// 			typeName: 'asset',
+	// 			type: 'image',
+	// 			meta: {},
+	// 			props: {
+	// 				w: page.bounds.w,
+	// 				h: page.bounds.h,
+	// 				mimeType: 'image/png',
+	// 				src: page.src,
+	// 				name: 'page',
+	// 				isAnimated: false,
+	// 			},
+	// 		}))
+	// 	);
 	
-		// Create shapes for PDF pages
-		this.currTldrawEditor.createShapes(
-			pdf.pages.map((page) => ({
-				id: page.shapeId as TLShapeId,
-				type: 'image',
-				x: page.bounds.x,
-				y: page.bounds.y,
-				isLocked: true,
-				props: {
-					assetId: page.assetId as TLAssetId,
-					w: page.bounds.w,
-					h: page.bounds.h,
-				},
-			}))
-		);
+	// 	// Create shapes for PDF pages
+	// 	this.currTldrawEditor.createShapes(
+	// 		pdf.pages.map((page) => ({
+	// 			id: page.shapeId as TLShapeId,
+	// 			type: 'image',
+	// 			x: page.bounds.x,
+	// 			y: page.bounds.y,
+	// 			isLocked: true,
+	// 			props: {
+	// 				assetId: page.assetId as TLAssetId,
+	// 				w: page.bounds.w,
+	// 				h: page.bounds.h,
+	// 			},
+	// 		}))
+	// 	);
 	
-		// Apply PDF-specific behavior
-		this.applyPdfBehavior(pdf);
+	// 	// Apply PDF-specific behavior
+	// 	this.applyPdfBehavior(pdf);
+	// }
+
+// Modify your processPdfInEditor method:
+async processPdfInEditor(pdf: Pdf) {
+	if (!this.currTldrawEditor) return;
+	const editor = this.currTldrawEditor;
+	
+	// Create a viewport manager for PDF
+	if (this.pdfViewportManager) {
+	  this.pdfViewportManager.stop();
 	}
+	this.pdfViewportManager = new PdfViewportManager(editor);
+	this.pdfViewportManager.start();
+	
+	// Create asset IDs
+	const pdfId = `pdf-${Date.now()}`;
+	
+	// Create assets with optimized approach
+	editor.batch(() => {
+	  // First create all assets - fixed with meta property
+	  editor.createAssets(
+		pdf.pages.map((page, index) => ({
+		  id: page.assetId as TLAssetId,
+		  typeName: 'asset',
+		  type: 'image',
+		  meta: {}, // Add the missing meta property
+		  props: {
+			w: page.bounds.w,
+			h: page.bounds.h,
+			mimeType: 'image/png',
+			src: page.src,
+			name: `page-${index + 1}`,
+			isAnimated: false,
+		  },
+		}))
+	  );
+	  
+	  // Create shapes
+	  let top = 0;
+	  const pageSpacing = 32;
+	  
+	  pdf.pages.forEach((page, index) => {
+		editor.createShape({
+		  type: 'pdfPage',
+		  x: page.bounds.x,
+		  y: top,
+		  props: {
+			w: page.bounds.w,
+			h: page.bounds.h,
+			assetId: page.assetId,
+			pageNumber: index + 1,
+			pdfId: pdfId,
+			quality: 'medium'
+		  }
+		});
+		
+		top += page.bounds.h + pageSpacing;
+	  });
+	});
+	
+	// Add keyboard handling through event listeners instead of registerKeybinding
+	const handleKeyDown = (e: KeyboardEvent) => {
+	  if (e.code === 'PageDown') this.navigatePdfPage(1);
+	  if (e.code === 'PageUp') this.navigatePdfPage(-1);
+	};
+	
+	document.addEventListener('keydown', handleKeyDown);
+	
+	// Store the event listener for cleanup
+	this.pdfKeyboardHandler = handleKeyDown;
+  }
+
+  navigatePdfPage(direction: 1 | -1) {
+	const editor = this.currTldrawEditor;
+	if (!editor) return;
+	
+	// Use camera information instead of getViewport
+	const camera = editor.getCamera();
+	const viewportBounds = editor.getViewportPageBounds(); // Use this instead of getViewport()
+	
+	const pdfPages = editor.getCurrentPageShapes()
+	  .filter(shape => shape.type === 'pdfPage')
+	  .sort((a, b) => {
+		const boundsA = editor.getShapePageBounds(a)!;
+		const boundsB = editor.getShapePageBounds(b)!;
+		return boundsA.y - boundsB.y;
+	  });
+	
+	// Find the first visible page
+	const visiblePageIndex = pdfPages.findIndex(page => {
+	  const bounds = editor.getShapePageBounds(page)!;
+	  return bounds && viewportBounds.includes(bounds.center);
+	});
+	
+	if (visiblePageIndex !== -1) {
+	  const nextIndex = Math.max(0, Math.min(pdfPages.length - 1, visiblePageIndex + direction));
+	  const nextPage = pdfPages[nextIndex];
+	  if (nextPage) {
+		const bounds = editor.getShapePageBounds(nextPage)!;
+		if (bounds) {
+		  editor.centerOnPoint(bounds.center);
+		}
+	  }
+	}
+  }
 	public addOpenInTldrawButtonToPDFViews() {
 		// Find all PDF views
 		const pdfViews = this.app.workspace.getLeavesOfType("pdf");
