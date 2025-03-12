@@ -510,7 +510,8 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
         const isMobile = Platform.isMobile;
         
         // Balance quality and performance
-        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
+        const visualScale = resolution;
+        //const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
         const scale = window.devicePixelRatio;
         
         let top = 0;
@@ -524,9 +525,10 @@ export async function loadPdf(name: string, source: ArrayBuffer, resolution: num
                 const viewport = page.getViewport({ scale: scale* visualScale });
                 
                 // Limit canvas dimensions (prevents excessive memory use)
-                const maxDimension = isMobile ? 2048 : 4096;
-                const canvasScale = Math.min(1, maxDimension / Math.max(viewport.width, viewport.height));
-                
+                //const maxDimension = isMobile ? 2048 : 4096;
+                //const canvasScale = Math.min(1, maxDimension / Math.max(viewport.width, viewport.height));
+                const canvasScale = 1.5;
+
                 canvas.width = viewport.width * canvasScale;
                 canvas.height = viewport.height * canvasScale;
                 
