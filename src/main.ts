@@ -63,6 +63,9 @@ import UserSettingsManager from "./obsidian/settings/UserSettingsManager";
 import * as pdfjs from 'pdfjs-dist';
 import { Pdf, PdfPage, loadPdf} from "./utils/file"; // Add this import
 import { ResolutionSelectionModal } from "./obsidian/modal/ResolutionSelectionModal";
+
+import { pdfEmbed } from './tldraw/embeds/pdf-embed';
+import { CustomEmbedDefinition, DEFAULT_EMBED_DEFINITIONS } from 'tldraw';
 @pluginBuild
 export default class TldrawPlugin extends Plugin {
 	// status bar stuff:
@@ -170,7 +173,50 @@ export default class TldrawPlugin extends Plugin {
 		this.statusBarViewModeReactRoot.unmount();
 		URL.revokeObjectURL(this.embedBoundsSelectorIcon);
 	}
-
+	getCustomEmbeds() {
+		// Keep all default embeds and add our PDF embed
+		return [...DEFAULT_EMBED_DEFINITIONS, pdfEmbed];
+	  }
+	  public async processPdfInEditor(pdf: Pdf): Promise<void> {
+		if (!this.currTldrawEditor) {
+		  throw new Error("Editor not initialized");
+		}
+		
+		// Create blob URL from the PDF source
+		let pdfUrl: string;
+		if (typeof pdf.source === 'string') {
+		  pdfUrl = pdf.source;
+		} else {
+		  const blob = new Blob([pdf.source], { type: 'application/pdf' });
+		  pdfUrl = URL.createObjectURL(blob);
+		}
+		
+		// Create a single PDF embed shape
+		this.currTldrawEditor.createShape({
+		  type: 'embed',
+		  x: 0,
+		  y: 0,
+		  props: {
+			url: pdfUrl,
+			// Remove the 'embed' property - it's not part of the schema
+			w: 800,
+			h: Math.min(1200, this.currTldrawEditor.getViewportScreenBounds().height * 0.8),
+		  },
+		});
+		
+		// Apply specific camera and view settings for PDF
+		this.applyPdfViewSettings();
+	  }
+	  
+	  private applyPdfViewSettings() {
+		if (!this.currTldrawEditor) return;
+		
+		const editor = this.currTldrawEditor;
+		// Center the PDF in the viewport
+		editor.zoomToFit();
+		// Give a little padding
+		editor.zoomOut();
+	  }
 	private registerEvents() {
 		const self = this;
 		// Monkey patch WorkspaceLeaf to open Tldraw drawings with TldrawView by default
@@ -378,48 +424,48 @@ export default class TldrawPlugin extends Plugin {
 		} as ViewState);
 	};
 
-	public async processPdfInEditor(pdf: Pdf): Promise<void> {
-		if (!this.currTldrawEditor) {
-			throw new Error("Editor not initialized");
-		}
+	// public async processPdfInEditor(pdf: Pdf): Promise<void> {
+	// 	if (!this.currTldrawEditor) {
+	// 		throw new Error("Editor not initialized");
+	// 	}
 		
-		// Create assets for PDF pages
-		this.currTldrawEditor.createAssets(
-			pdf.pages.map((page) => ({
-				id: page.assetId as TLAssetId,
-				typeName: 'asset',
-				type: 'image',
-				meta: {},
-				props: {
-					w: page.bounds.w,
-					h: page.bounds.h,
-					mimeType: 'image/png',
-					src: page.src,
-					name: 'page',
-					isAnimated: false,
-				},
-			}))
-		);
+	// 	// Create assets for PDF pages
+	// 	this.currTldrawEditor.createAssets(
+	// 		pdf.pages.map((page) => ({
+	// 			id: page.assetId as TLAssetId,
+	// 			typeName: 'asset',
+	// 			type: 'image',
+	// 			meta: {},
+	// 			props: {
+	// 				w: page.bounds.w,
+	// 				h: page.bounds.h,
+	// 				mimeType: 'image/png',
+	// 				src: page.src,
+	// 				name: 'page',
+	// 				isAnimated: false,
+	// 			},
+	// 		}))
+	// 	);
 	
-		// Create shapes for PDF pages
-		this.currTldrawEditor.createShapes(
-			pdf.pages.map((page) => ({
-				id: page.shapeId as TLShapeId,
-				type: 'image',
-				x: page.bounds.x,
-				y: page.bounds.y,
-				isLocked: true,
-				props: {
-					assetId: page.assetId as TLAssetId,
-					w: page.bounds.w,
-					h: page.bounds.h,
-				},
-			}))
-		);
+	// 	// Create shapes for PDF pages
+	// 	this.currTldrawEditor.createShapes(
+	// 		pdf.pages.map((page) => ({
+	// 			id: page.shapeId as TLShapeId,
+	// 			type: 'image',
+	// 			x: page.bounds.x,
+	// 			y: page.bounds.y,
+	// 			isLocked: true,
+	// 			props: {
+	// 				assetId: page.assetId as TLAssetId,
+	// 				w: page.bounds.w,
+	// 				h: page.bounds.h,
+	// 			},
+	// 		}))
+	// 	);
 	
-		// Apply PDF-specific behavior
-		this.applyPdfBehavior(pdf);
-	}
+	// 	// Apply PDF-specific behavior
+	// 	this.applyPdfBehavior(pdf);
+	// }
 	public addOpenInTldrawButtonToPDFViews() {
 		// Find all PDF views
 		const pdfViews = this.app.workspace.getLeavesOfType("pdf");

@@ -386,3 +386,57 @@ div[data-type="tldraw-read-only"] .view-content.tldraw-view-content {
 .tldraw-pdf-button:hover {
     background-color: var(--interactive-hover);
 }
+
+/* PDF Embed Styles */
+.pdf-embed-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 10px;
+	background-color: var(--background-primary);
+	border-radius: 6px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .pdf-pages-container {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+  }
+  
+  .pdf-page {
+	position: relative;
+	margin-bottom: 10px;
+	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+  
+  .annotation-layer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	pointer-events: none; /* Allow clicks to pass through to tldraw */
+  }
+  
+  .pdf-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 10px;
+	padding: 6px;
+	background-color: var(--background-secondary);
+	border-radius: 4px;
+  }
+  /* PDF Embed Styles */
+.tl-embed[data-embed="pdf"] {
+	background-color: var(--background-primary);
+	border-radius: 6px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .tl-embed[data-embed="pdf"] iframe {
+	border: none;
+	width: 100%;
+	height: 100%;
+  }
