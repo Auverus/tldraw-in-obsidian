@@ -15,9 +15,10 @@ import { safeSecondsToMs } from "src/utils/utils";
 import { logClass } from "src/utils/logging";
 import { TldrawStoreIndexedDB } from "src/tldraw/indexeddb-store";
 import TldrawStoreExistsIndexedDBModal, { TldrawStoreConflictResolveCanceled, TldrawStoreConflictResolveFileUnloaded } from "./modal/TldrawStoreExistsIndexedDBModal";
-
+import { PdfPageShapeUtil } from "../tldraw/PdfPageShape"; 
 export class TldrawView extends TldrawLoadableMixin(TextFileView) {
 	plugin: TldrawPlugin;
+	editor: any; // Reference to the tldraw editor instance
 
 	constructor(leaf: WorkspaceLeaf, plugin: TldrawPlugin) {
 		super(leaf);
@@ -53,7 +54,29 @@ export class TldrawView extends TldrawLoadableMixin(TextFileView) {
 			},
 			true
 		);
-
+		
+		// Store reference to editor when it's loaded
+		const editor = this.editor;
+		
+		useEffect(() => {
+					if (editor) {
+					  // Register our custom PDF shape util
+					  try {
+						editor.store.registerShapeUtil(PdfPageShapeUtil);
+						
+						// Register any other custom shapes from the global array
+						if (window.tldrawCustomShapes) {
+						  window.tldrawCustomShapes.forEach(ShapeUtilClass => {
+							if (ShapeUtilClass !== PdfPageShapeUtil) { // Avoid duplicate registration
+							  editor.store.registerShapeUtil(ShapeUtilClass);
+							}
+						  });
+						}
+					  } catch (err) {
+						console.error("Failed to register custom shapes:", err);
+					  }
+					}
+				  }, [editor]);
 		this.registerOnUnloadFile(() => storeInstance.unregister());
 
 		this.checkConflictingData(this.file, storeInstance.documentStore).then(
@@ -180,3 +203,18 @@ export class TldrawFileView extends TldrawLoadableMixin(TextFileView) {
 		await this.save();
 	}
 }
+/**
+ * Simple implementation of React's useEffect for non-React environments
+ * @param effect Function to run
+ * @param deps Dependency array to track changes
+ * @returns Cleanup function
+ */
+function useEffect(effect: () => void | (() => void), deps?: any[]) {
+	// In this context, we just execute the effect immediately
+	// since we don't have component lifecycle hooks
+	const cleanup = effect();
+	
+	// Return a function that can be called to clean up the effect
+	return typeof cleanup === 'function' ? cleanup : undefined;
+}
+

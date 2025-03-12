@@ -1,5 +1,6 @@
 import { TLDataDocument, TLDataDocumentStore, TldrawPluginMetaData } from "src/utils/document";
 import { TLStore, createTLStore, defaultShapeUtils } from "tldraw";
+import { PdfPageShapeUtil } from "./PdfPageShape";
 
 export function processInitialData(initialData: TLDataDocument): TLDataDocumentStore {
 	const { meta, store }: {
@@ -13,9 +14,9 @@ export function processInitialData(initialData: TLDataDocument): TLDataDocumentS
 		return {
 			meta: initialData.meta,
 			store: createTLStore({
-				shapeUtils: defaultShapeUtils,
+				shapeUtils: [...defaultShapeUtils, PdfPageShapeUtil],  // This is correctly adding the shape
 				initialData: initialData.raw,
-			})
+			  })
 		}
 	})();
 

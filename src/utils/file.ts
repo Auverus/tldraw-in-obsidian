@@ -630,99 +630,83 @@ const pageSpacing = 32
 
 
 export async function loadPdf(name: string, source: ArrayBuffer, resolution: number = 1.5): Promise<Pdf> {
+    // Import PDF.js
     const PdfJS = await import('pdfjs-dist');
     const originalWorkerSrc = PdfJS.GlobalWorkerOptions.workerSrc;
     
     try {
-        // Import worker and setup
+        // Setup worker
         const PdfWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
         PdfJS.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/build/pdf.worker.js';
         
-        // Load PDF document with optimized settings
+        // Load PDF document for initial processing
         const pdf = await PdfJS.getDocument({
-            data: source.slice(0),
-//            disableWorker: true // Use main thread for better compatibility
+            data: source
         }).promise;
-
+        
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d', {
-            alpha: false, // No transparency for better performance
-            willReadFrequently: true // Optimize for canvas reads
+            alpha: false,
+            willReadFrequently: true
         });
         
         if (!context) throw new Error('Failed to create canvas context');
 
-        // Optimizations
+        // Detect device capabilities
         const isMobile = window.innerWidth < 1024;
-        const visualScale = isMobile ? Math.min(resolution, 1.0) : resolution;
-        const scale = window.devicePixelRatio;
-        const maxDimension = isMobile ? 2048 : 4096;
+        const scale = Math.min(resolution, isMobile ? 1.0 : resolution) * window.devicePixelRatio;
         
         let top = 0;
         let widest = 0;
         const pages: PdfPage[] = [];
+        const pageSpacing = 32;
         
-        // Process each page with optimized rendering
+        // Process each page and render to image
         for (let i = 1; i <= pdf.numPages; i++) {
             try {
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: scale * visualScale });
+                const viewport = page.getViewport({ scale });
                 
-                // Limit dimensions to prevent memory issues
-                const canvasScale = Math.min(1, maxDimension / Math.max(viewport.width, viewport.height));
-                
-                canvas.width = viewport.width * canvasScale;
-                canvas.height = viewport.height * canvasScale;
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
                 
                 const renderContext = {
                     canvasContext: context,
-                    viewport: page.getViewport({ 
-                        scale: scale * visualScale * canvasScale
-                    }),
+                    viewport
                 };
                 
                 await page.render(renderContext).promise;
-
-                // Choose optimal format based on content type
-                const hasColorContent = checkForColor(context, canvas);
-                const format = hasColorContent ? 'image/jpeg' : 'image/png';
-                const quality = hasColorContent ? 0.85 : undefined;
                 
-                const width = viewport.width / scale;
-                const height = viewport.height / scale;
+                const width = viewport.width / window.devicePixelRatio;
+                const height = viewport.height / window.devicePixelRatio;
                 
                 pages.push({
-                    src: canvas.toDataURL(format, quality),
+                    src: canvas.toDataURL('image/png'),
                     bounds: new Box(0, top, width, height),
                     assetId: `asset:${AssetRecordType.createId()}`,
                     shapeId: createShapeId(),
                 });
                 
-                top += height + 32; // pageSpacing
+                top += height + pageSpacing;
                 widest = Math.max(widest, width);
                 
-                // Clean canvas between pages
+                // Clear canvas between pages
                 context.clearRect(0, 0, canvas.width, canvas.height);
-                
-                // Force garbage collection if possible
-                if (i % 5 === 0 && typeof window.gc === 'function') {
-                    try { window.gc(); } catch (e) {}
-                }
             } catch (pageError) {
                 console.error(`Error rendering page ${i}:`, pageError);
             }
         }
         
-        // Clean up resources
-        canvas.width = 0;
-        canvas.height = 0;
-
         // Position pages
         for (const page of pages) {
             page.bounds.x = (widest - page.bounds.width) / 2;
         }
 
-        return { name, pages, source };
+        return { 
+            name, 
+            pages, 
+            source // Include the original source for direct PDF rendering
+        };
     } finally {
         PdfJS.GlobalWorkerOptions.workerSrc = originalWorkerSrc;
     }
