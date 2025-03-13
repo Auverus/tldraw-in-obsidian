@@ -496,21 +496,20 @@ export default class TldrawPlugin extends Plugin {
 			  // 5. Set the view mode
 			  await this.updateViewMode(VIEW_TYPE_TLDRAW, newLeaf);
 			  
-			  // 6. Wait for editor initialization
-			  let editorReady = false;
-			  for (let attempt = 0; attempt < 50; attempt++) {
+			// 6. Wait for editor initialization
+			let editorReady = false;
+			for (let attempt = 0; attempt < 600; attempt++) {  // 600 attempts * 100ms = 60 seconds (1 minute)
 				if (this.currTldrawEditor) {
-				  editorReady = true;
-				  break;
+					editorReady = true;
+					break;
 				}
 				await new Promise(resolve => setTimeout(resolve, 100));
-			  }
-			  
-			  if (!editorReady) {
+			}
+
+			if (!editorReady) {
 				new Notice("Editor initialization timed out. Please try again.");
 				return;
-			  }
-			  
+			}
 			  // 7. Process the PDF with the selected resolution
 			  const loadedPdf = await loadPdf(file.name, pdfData, resolution);
 			  await this.processPdfInEditor(loadedPdf);
